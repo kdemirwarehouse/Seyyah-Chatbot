@@ -20,7 +20,6 @@ SEHIR_LABEL = {
 }
 
 # Minimum benzerlik skoru — bunun altındaki chunk'lar bağlama eklenmez.
-# Cosine similarity: 1.0 = tam eşleşme, 0.0 = alakasız
 SKOR_ESIGI = 0.25
 
 # ── ChromaDB bağlantısı ───────────────────────────────────
@@ -55,13 +54,15 @@ def sorgula_ve_yanitla(
     kullanici_sorusu: str,
     sehir: str = None,
     sinif: str = None,
-    top_k: int = 8,          # 4→8: daha geniş havuz, LLM en iyisini seçer
+    top_k: int = 8,
+    gecmis: list = None,
 ) -> dict:
     """
     1) ChromaDB'de semantik arama yap (top_k=8)
     2) Skor eşiğinin altındaki chunk'ları filtrele
     3) Kalan chunk'ları skora göre sıralı olarak LLM'e ver
-    4) LLM yanıtı + kaynakları döndür
+    4) Konuşma geçmişini LLM'e ilet
+    5) LLM yanıtı + kaynakları döndür
     """
     if sehir: sehir = _normalize(sehir)
     if sinif: sinif = sinif.lower()
@@ -90,7 +91,7 @@ def sorgula_ve_yanitla(
     metas     = results["metadatas"][0]
     distances = results["distances"][0]
 
-    # Skor hesapla + eşik filtresi + skora göre sırala (en yüksek önce)
+    # Skor hesapla + eşik filtresi + skora göre sırala
     ham = []
     for doc, meta, dist in zip(docs, metas, distances):
         skor = round(max(0.0, 1 - dist), 3)
@@ -103,13 +104,10 @@ def sorgula_ve_yanitla(
                 "skor":     skor,
             })
 
-    # Skora göre azalan sırala — en alakalı chunk bağlamın başında olur
     kaynaklar = sorted(ham, key=lambda x: x["skor"], reverse=True)
-
-    # LLM'e gönderilecek metinler (skor sırasına göre)
     context_metinler = [k["metin"] for k in kaynaklar]
 
-    yanit = llm_yanit_al(kullanici_sorusu, context_metinler)
+    yanit = llm_yanit_al(kullanici_sorusu, context_metinler, gecmis=gecmis)
 
     return {
         "yanit":     yanit,
