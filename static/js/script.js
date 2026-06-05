@@ -343,11 +343,11 @@ function removeTypingIndicator() {
 // ─────────────────────────────────────────
 // API ÇAĞRISI — /api/query
 // ─────────────────────────────────────────
-async function apiQuery(soru, sehir = null, sinif = null) {
+async function apiQuery(soru, sehir = null, sinif = null, gecmis = []) {
     const response = await fetch("/api/query", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ soru, sehir, sinif }),
+        body:    JSON.stringify({ soru, sehir, sinif, gecmis }),
     });
 
     if (!response.ok) {
@@ -355,10 +355,8 @@ async function apiQuery(soru, sehir = null, sinif = null) {
         throw new Error(err.error || `Sunucu hatası: ${response.status}`);
     }
 
-    return response.json();   // { yanit, kaynaklar }
+    return response.json();
 }
-
-
 // ─────────────────────────────────────────
 // FORM SUBMIT
 // ─────────────────────────────────────────
@@ -398,7 +396,15 @@ function initFormListener() {
             const { sehir, sinif } = sorudenFiltre(text);
 
             // RAG API çağrısı
-            const sonuc = await apiQuery(text, sehir, sinif);
+            const gecmis = (chat.messages || [])
+                .slice(-7, -1)
+                .map(m => ({
+                    role:    m.sender === "user" ? "user" : "assistant",
+                    content: m.text,
+                }));
+
+            const sonuc = await apiQuery(text, sehir, sinif, gecmis);
+
 
             removeTypingIndicator();
             await sendBotResponse(sonuc.yanit);
