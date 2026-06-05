@@ -25,9 +25,10 @@ CEVAP FORMATI KURALLARI:
 - Sadece düz metin ve büyük harfli başlıklar kullan."""
 
 
-def llm_yanit_al(kullanici_sorusu: str, context_metinler: list) -> str:
+def llm_yanit_al(kullanici_sorusu: str, context_metinler: list, gecmis: list = None) -> str:
     """
     ChromaDB'den gelen chunk'ları bağlam olarak kullanıp GPT-4.1-mini'ye gönderir.
+    gecmis: [{"role": "user"/"assistant", "content": "..."}] formatında konuşma geçmişi.
     context_metinler boşsa LLM'e bağlam olmadığını bildir.
     """
     if context_metinler:
@@ -47,13 +48,25 @@ Soru: {kullanici_sorusu}"""
             "Bunu kullanıcıya dürüstçe belirt.)"
         )
 
+    # Geçmiş mesajları hazırla (en fazla son 6 mesaj = 3 tur)
+    gecmis_mesajlar = []
+    if gecmis:
+        for msg in gecmis[-6:]:
+            rol = msg.get("role")
+            icerik = msg.get("content", "")
+            if rol in ("user", "assistant") and icerik:
+                gecmis_mesajlar.append({"role": rol, "content": icerik})
+
+    messages = (
+        [{"role": "system", "content": SYSTEM_PROMPT}]
+        + gecmis_mesajlar
+        + [{"role": "user", "content": kullanici_mesaji}]
+    )
+
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": kullanici_mesaji},
-        ],
-        temperature=0.3,   # 0.7→0.5: daha tutarlı, daha az yaratıcı sapma
+        messages=messages,
+        temperature=0.3,
         max_tokens=1024,
     )
 
